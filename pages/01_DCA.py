@@ -16,6 +16,13 @@ from utils.anova_utils import (
 	tukey,
 	validar_dca,
 )
+from utils.diagnostico_utils import (
+	grafico_qq,
+	grafico_residuos_vs_ajustados,
+	prueba_levene,
+	prueba_shapiro,
+	residuos_y_ajustados,
+)
 
 
 @st.cache_data(show_spinner=False)
@@ -119,9 +126,36 @@ p_valor = float(fila_tratamientos["p-valor"])
 f_critica = f_critica_dca(modelo, alfa)
 cv = coeficiente_variacion(modelo, datos, columna_respuesta)
 resumen = resumen_tratamientos(datos, columna_tratamiento, columna_respuesta)
+# Los residuos del modelo se usan para revisar normalidad y patrones de dispersión.
+datos_residuos = residuos_y_ajustados(modelo)
+estadistico_shapiro, p_shapiro, conclusion_shapiro = prueba_shapiro(
+	datos_residuos["Residuos"], alfa
+)
+estadistico_levene, p_levene, conclusion_levene = prueba_levene(
+	datos,
+	columna_tratamiento,
+	columna_respuesta,
+	alfa,
+)
+tabla_supuestos = pd.DataFrame(
+	[
+		{
+			"Prueba": "Shapiro-Wilk",
+			"Estadístico": estadistico_shapiro,
+			"p-valor": p_shapiro,
+			"Conclusión": conclusion_shapiro,
+		},
+		{
+			"Prueba": "Levene",
+			"Estadístico": estadistico_levene,
+			"p-valor": p_levene,
+			"Conclusión": conclusion_levene,
+		},
+	]
+)
 
-pestana_datos, pestana_anova, pestana_comparaciones, pestana_graficos = st.tabs(
-	["Datos", "ANOVA", "Comparaciones", "Gráficos"]
+pestana_datos, pestana_anova, pestana_comparaciones, pestana_graficos, pestana_supuestos = st.tabs(
+	["Datos", "ANOVA", "Comparaciones", "Gráficos", "Supuestos"]
 )
 
 with pestana_datos:
@@ -205,3 +239,36 @@ with pestana_graficos:
 		},
 	)
 	st.plotly_chart(grafico_medias, width="stretch")
+
+with pestana_supuestos:
+	st.subheader("Diagnóstico de supuestos del DCA")
+	st.markdown(
+		"**Normalidad:** Shapiro-Wilk evalúa si los residuos son compatibles con una "
+		"distribución normal. El gráfico Q-Q permite revisar visualmente su alineación "
+		"con los cuantiles normales."
+	)
+	st.plotly_chart(
+		grafico_residuos_vs_ajustados(datos_residuos),
+		width="stretch",
+	)
+	st.plotly_chart(grafico_qq(datos_residuos["Residuos"]), width="stretch")
+
+	st.markdown(
+		"**Homogeneidad de varianzas:** Levene, centrada en la mediana, contrasta si la "
+		"variabilidad de la respuesta es similar entre tratamientos."
+	)
+	formato_supuestos = {
+		"Estadístico": "{:.4f}",
+		"p-valor": "{:.4f}",
+	}
+	st.dataframe(
+		tabla_supuestos.style.format(formato_supuestos),
+		width="stretch",
+		hide_index=True,
+	)
+
+	st.markdown(
+		"**Independencia por aleatorización:** se sustenta en la asignación aleatoria "
+		"de las unidades experimentales y en que no interfieran entre sí. No se determina "
+		"con Shapiro-Wilk ni con Levene; debe revisarse cómo se condujo el ensayo."
+	)

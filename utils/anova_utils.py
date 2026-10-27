@@ -6,6 +6,7 @@ from typing import BinaryIO
 
 import numpy as np
 import pandas as pd
+from scipy.stats import f as distribucion_f
 from scipy.stats import studentized_range
 from statsmodels.formula.api import ols
 from statsmodels.stats.anova import anova_lm
@@ -210,6 +211,31 @@ def coeficiente_variacion(
 
     # CV = sqrt(CME) / media general * 100; expresa el error respecto al nivel de respuesta.
     return float(np.sqrt(cme) / media_general * 100)
+
+
+def f_critica_dca(modelo: RegressionResultsWrapper, alfa: float = 0.05) -> float:
+    """Calcula el valor crítico F para el factor de un DCA.
+
+    Args:
+        modelo: Modelo OLS ajustado para un DCA.
+        alfa: Nivel de significancia entre cero y uno.
+
+    Returns:
+        Valor crítico de la distribución F para tratamientos y error.
+
+    Raises:
+        ValueError: Si alfa o los grados de libertad no son válidos.
+    """
+    if not 0 < alfa < 1:
+        raise ValueError("Alfa debe estar entre cero y uno.")
+
+    gl_tratamientos = float(modelo.df_model)
+    gl_error = float(modelo.df_resid)
+    if gl_tratamientos <= 0 or gl_error <= 0:
+        raise ValueError("El modelo debe tener grados de libertad positivos.")
+
+    # F crítica = F_(1-alfa; gl tratamientos, gl error), umbral de la prueba del ANOVA.
+    return float(distribucion_f.ppf(1 - alfa, gl_tratamientos, gl_error))
 
 
 def tukey(
